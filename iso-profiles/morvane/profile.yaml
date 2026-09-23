@@ -7,143 +7,29 @@ live-session:
   use-xlibre: false
   services:
     - acpid
-    - bluetoothd
-    - cronie
-    - cupsd
     - syslog-ng
-    - NetworkManager
-    - sddm
-    - power-profiles-daemon
+    - iwd
+    - dhcpcd
   user-services:
     - dbus
-    - pipewire
-    - pipewire-pulse
-    - wireplumber
 rootfs:
   packages:
-    - bluedevil
-    - breeze
-    - breeze-gtk
-    - kactivitymanagerd
-    - kde-cli-tools
-    - kdecoration
-    - kde-gtk-config
-    - kdeplasma-addons
-    - kgamma
-    - kglobalacceld
-    - kinfocenter
-    - kmenuedit
-    - kpipewire
-    - kscreen
-    - kscreenlocker
-    - ksshaskpass
-    - ksystemstats
-    - kwallet-pam
-    - kwayland
-    - kwayland-integration
-    - kwin
-    - kwrited
-    - layer-shell-qt
-    - libkscreen
-    - libksysguard
-    - libplasma
-    - milou
-    - ocean-sound-theme
-    - oxygen
-    - oxygen-sounds
-    - plasma5support
-    - plasma-activities
-    - plasma-activities-stats
-    - plasma-browser-integration
-    - plasma-desktop
-    - plasma-disks
-    - plasma-integration
-    - plasma-nm
-    - plasma-pa
-    - plasma-systemmonitor
-    - plasma-welcome
-    - plasma-workspace
-    - plasma-workspace-wallpapers
-    - polkit-kde-agent
-    - powerdevil
-    - print-manager
-    - qqc2-breeze-style
-    - sddm-kcm
-    - systemsettings
-    - wacomtablet
-    - qt6-multimedia-ffmpeg
-    - ark
-    - dolphin
-    - falkon
-    - ffmpegthumbs
-    - gwenview
-    - kate
-    - keditbookmarks
-    - kfind
-    - kgpg
-    - kio-admin
-    - konsole
-    - konversation
-    - kwalletmanager
-    - okular
-    - partitionmanager
-    - vlc
-    - artix-icons
-    - artix-wallpapers
-    - artix-netinstall-presets
+    - terminus-font
+    - iwd
+    - broadcom-wl
     - artix-grub-theme
-    - artix-branding-base
-    - artix-plasma-splash
-    - hiredis
-    - libdbi
-    - libesmtp
-    - libmaxminddb
-    - librabbitmq-c
-    - librdkafka
-    - mongo-c-driver
-    - net-snmp
   packages-init:
-    dinit:
-      - pipewire-dinit
-      - pipewire-pulse-dinit
-      - wireplumber-dinit
-      - dinit-user-spawn
-      - syslog-ng-dinit
-      - sddm-dinit
-      - networkmanager-dinit
-      - cups-dinit
-    openrc:
-      - pipewire-openrc
-      - pipewire-pulse-openrc
-      - wireplumber-openrc
-      - syslog-ng-openrc
-      - sddm-openrc
-      - networkmanager-openrc
-      - cups-openrc
     runit:
       - syslog-ng-runit
-      - sddm-runit
-      - networkmanager-runit
-      - cups-runit
-    s6:
-      - syslog-ng-s6
-      - sddm-s6
-      - networkmanager-s6
-      - cups-s6
+      - iwd-runit
 livefs:
   packages:
     - mkinitcpio-nfs-utils
     - squashfs-tools
     - artix-grub-live
-    - virtualbox-guest-utils
-    - broadcom-wl
-    - artix-docs
+    - artools-base
+    - python
+    - python-textual
   packages-init:
-    dinit:
-      - artix-live-dinit
-    openrc:
-      - artix-live-openrc
     runit:
       - artix-live-runit
-    s6:
-      - artix-live-s6
