@@ -1,0 +1,68 @@
+- name: "Default"
+  description: "Default packages"
+  hidden: false
+  selected: true
+  critical: true
+  immutable: true
+  packages:
+    - linux
+    - linux-headers
+    - grub
+    - efibootmgr
+    - sudo
+
+- name: "Kernel"
+  description: "Kernel and modules"
+  selected: false
+  packages:
+    - acpi_call
+    - bbswitch
+    - broadcom-wl
+    - tp_smapi
+    - linux-lts
+    - linux-lts-headers
+
+- name: "Firmware"
+  description: "Firmware"
+  selected: false
+  packages:
+    - b43-fwcutter
+    - linux-firmware
+    - linux-firmware-bnx2x
+    - linux-firmware-liquidio
+    - linux-firmware-marvell
+    - linux-firmware-mellanox
+    - linux-firmware-nfp
+    - linux-firmware-qcom
+    - linux-firmware-qlogic
+    - linux-firmware-whence
+    - sof-firmware
+    - alsa-firmware
+    - intel-ucode
+    - amd-ucode
+
+- name: "Utilities"
+  description: "System Utilities"
+  selected: true
+  packages:
+    - lsb-release
+    - nano
+    - vi
+
+- name: "Devel"
+  description: "Artix development"
+  selected: false
+  packages:
+    - base-devel
+    - artix-checkupdates
+    - artix-rebuild-order
+    - artools-base
+    - artools-iso
+    - artools-pkg
+
+- name: "Style"
+  description: "Artix themes, icons, branding"
+  selected: false
+  packages:
+    - artix-netinstall-presets
+    - artix-grub-theme
