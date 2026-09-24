@@ -1,0 +1,11 @@
+##
+## Artix mirrors for the MorvaneOS build container.
+## Pacman only falls through to the next mirror when one fails, not when it is
+## slow, so keep fast mirrors at the top. mirrors.dotsrc.org (the image default)
+## was left out: ~75 KB/s from here on 2026-09-24.
+##
+
+Server = https://ftp.crifo.org/artix/repos/$repo/os/$arch
+Server = https://mirror1.artixlinux.org/repos/$repo/os/$arch
+Server = https://artix.sakamoto.pl/$repo/os/$arch
+Server = https://mirror.clarkson.edu/artix-linux/repos/$repo/os/$arch

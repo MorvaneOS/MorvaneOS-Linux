@@ -1,9 +1,9 @@
 
-[?25h[?7hArtix Live ISO (\l) - \s-\r \m
+[?25h[?7hMorvaneOS Live ISO (\l) - \s-\r \m
 
-         # Welcome to Artix #
+         # Welcome to MorvaneOS #
 
 login for the live environment:
-    user     'artix'
-    password 'artix'
+    user     'morvane'
+    password 'morvane'
 

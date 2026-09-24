@@ -1,16 +1,36 @@
 #!/usr/bin/env bash
-# Builds the MorvaneOS ISO. Run inside WSL: bash build.sh
+# Builds the MorvaneOS ISO inside an Artix container. Needs Docker; works on
+# Linux and in WSL (Docker Desktop). Usage: bash build.sh
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
-WS="$HOME/artools-workspace"
+IMAGE=morvane-build
+PROFILE=morvane
 
-# Sync profiles from the repo into the artools workspace (Linux filesystem)
-rm -rf "$WS/iso-profiles"
-cp -r "$REPO/iso-profiles" "$WS/iso-profiles"
+# Rebuilds only when build-env/ changes; otherwise Docker reuses the cached image
+docker build -t "$IMAGE" -f "$REPO/build-env/Dockerfile" "$REPO"
 
-buildiso -p morvane -i runit
+# --privileged: buildiso mounts filesystems and chroots, which Docker blocks by default.
+# The repo is mounted at /morvane (artools-iso.conf points the workspace and ISO
+# output there), artools/ becomes the config dir, and a named volume keeps the
+# package cache between builds so packages are only downloaded once.
+# The chroots dir also needs a volume: buildiso layers livefs with overlayfs, and
+# the container's own root is already overlayfs, which can't be an upperdir.
+# Host /dev is bind-mounted because --privileged only copies the device nodes that
+# exist at start; loop devices the kernel creates mid-build (for efi.img) would
+# otherwise never appear in the container.
+docker run --rm --privileged \
+    -v /dev:/dev \
+    -v "$REPO":/morvane \
+    -v "$REPO/artools":/root/.config/artools \
+    -v morvane-pkg-cache:/var/cache/pacman/pkg \
+    -v morvane-chroots:/var/lib/artools \
+    "$IMAGE" \
+    bash -c "buildiso -p $PROFILE; rc=\$?; chown -R $(id -u):$(id -g) /morvane/out; exit \$rc"
 
-mkdir -p "$REPO/out"
-cp "$WS"/iso/morvane/*.iso "$REPO/out/"
-echo "Done: ISO copied to out/"
+# artools hard-codes an 'artix-' prefix on the file name; drop it
+for iso in "$REPO/out/$PROFILE"/artix-*.iso; do
+    [[ -e "$iso" ]] && mv "$iso" "$(dirname "$iso")/$(basename "$iso" | sed 's/^artix-//')"
+done
+
+echo "Done: ISO is in out/$PROFILE/"
