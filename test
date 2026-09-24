@@ -3,6 +3,7 @@
 #   --bios      boot with legacy BIOS instead of UEFI
 #   --disk      attach a virtual disk (out/test-disk.qcow2, created at 20G) to install onto
 #   --no-iso    boot from the virtual disk only, to test an installed system (implies --disk)
+#   --sound     give the VM a sound card that plays through this machine's speakers
 #
 # While a live ISO VM is running, `./test ssh [command]` opens a root shell in it
 # (or runs one command) from this terminal, so output can be copied out.
@@ -22,12 +23,13 @@ if [[ "${1:-}" == ssh ]]; then
         root@127.0.0.1 "$@"
 fi
 
-uefi=true disk=false iso=true
+uefi=true disk=false iso=true sound=false
 for arg in "$@"; do
     case "$arg" in
         --bios) uefi=false ;;
         --disk) disk=true ;;
         --no-iso) disk=true iso=false ;;
+        --sound) sound=true ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
@@ -42,6 +44,16 @@ fi
 args=(-m 4G -smp 2
       -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
       -fw_cfg "name=opt/org.morvane/ssh_key,file=$SSH_KEY.pub")
+
+# Opt-in: the VM's audio stream can interrupt whatever this machine is playing.
+# Output only (hda-output), so the VM never opens the microphone.
+if "$sound"; then
+    if command -v pactl >/dev/null && pactl info >/dev/null 2>&1; then
+        args+=(-audiodev pa,id=snd0 -device intel-hda -device hda-output,audiodev=snd0)
+    else
+        echo "Warning: no PulseAudio/PipeWire server found, starting without sound" >&2
+    fi
+fi
 
 if [[ -w /dev/kvm ]]; then
     args+=(-enable-kvm -cpu host)
@@ -67,14 +79,18 @@ fi
 
 if "$disk"; then
     [[ -f "$OUT/test-disk.qcow2" ]] || qemu-img create -f qcow2 "$OUT/test-disk.qcow2" 20G
-    args+=(-drive "file=$OUT/test-disk.qcow2,if=virtio")
+    # bootindex, not -boot: UEFI firmware ignores -boot but honours bootindex
+    args+=(-drive "file=$OUT/test-disk.qcow2,if=none,id=disk"
+           -device "virtio-blk-pci,drive=disk,bootindex=1")
 fi
 
 if "$iso"; then
     iso_file=$(ls -t "$OUT"/morvane/*.iso 2>/dev/null | head -1)
     [[ -n "$iso_file" ]] || { echo "No ISO in out/morvane/; run compile first" >&2; exit 1; }
     echo "Booting $(basename "$iso_file") ($("$uefi" && echo UEFI || echo BIOS))"
-    args+=(-cdrom "$iso_file" -boot d)
+    # The ISO boots first even when the disk already has a system on it
+    args+=(-drive "file=$iso_file,media=cdrom,if=none,id=cdrom,readonly=on"
+           -device "ide-cd,drive=cdrom,bootindex=0")
 fi
 
 exec qemu-system-x86_64 "${args[@]}"
