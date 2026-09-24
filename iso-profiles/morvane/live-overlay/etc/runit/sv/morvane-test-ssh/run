@@ -1,0 +1,26 @@
+#!/bin/sh
+# SSH into ./test VMs, and nowhere else.
+#
+# ./test passes a public key through QEMU's fw_cfg device, which real hardware
+# doesn't have. With no key this service stops itself, so a live ISO booted on a
+# real machine never listens for SSH (root has no-password autologin there).
+# When a key is present, only that key can log in.
+
+key=/sys/firmware/qemu_fw_cfg/by_name/opt/org.morvane/ssh_key/raw
+
+modprobe qemu_fw_cfg 2>/dev/null
+
+if [ ! -r "$key" ]; then
+	sv down .
+	exit 0
+fi
+
+install -d -m 700 /root/.ssh
+cat "$key" > /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+
+ssh-keygen -A >/dev/null 2>&1
+exec /usr/bin/sshd -D -e \
+	-o PermitRootLogin=prohibit-password \
+	-o PasswordAuthentication=no \
+	-o KbdInteractiveAuthentication=no

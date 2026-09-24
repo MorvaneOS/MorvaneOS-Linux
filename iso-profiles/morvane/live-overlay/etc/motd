@@ -1,0 +1,17 @@
+
+Welcome to the MorvaneOS live system.
+
+Connect to the internet (wired connections work automatically):
+  iwctl
+  [iwd]# device list
+  [iwd]# station wlan0 scan
+  [iwd]# station wlan0 get-networks
+  [iwd]# station wlan0 connect "Network name"
+  [iwd]# exit
+
+Check you're online:
+  ping -c 3 morvane.doughmination.gay
+
+Then install MorvaneOS:
+  morvane-install
+

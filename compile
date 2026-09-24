@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the MorvaneOS ISO inside an Artix container. Needs Docker; works on
-# Linux and in WSL (Docker Desktop). Usage: bash compile.sh
+# Linux and in WSL (Docker Desktop). Usage: ./compile
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
@@ -16,17 +16,20 @@ docker build -t "$IMAGE" -f "$REPO/build-env/Dockerfile" "$REPO"
 # package cache between builds so packages are only downloaded once.
 # The chroots dir also needs a volume: buildiso layers livefs with overlayfs, and
 # the container's own root is already overlayfs, which can't be an upperdir.
+# -w copies the build's pacman.conf (with [morvane]) into the ISO, so the live
+# system, and systems installed from it, get MorvaneOS packages and updates.
+# USER is set because artools hands the finished ISO to $USER, unset in Docker.
 # Host /dev is bind-mounted because --privileged only copies the device nodes that
 # exist at start; loop devices the kernel creates mid-build (for efi.img) would
 # otherwise never appear in the container.
-docker run --rm --privileged \
+docker run --rm --privileged -e USER=root \
     -v /dev:/dev \
     -v "$REPO":/morvane \
     -v "$REPO/artools":/root/.config/artools \
     -v morvane-pkg-cache:/var/cache/pacman/pkg \
     -v morvane-chroots:/var/lib/artools \
     "$IMAGE" \
-    bash -c "buildiso -p $PROFILE; rc=\$?; chown -R $(id -u):$(id -g) /morvane/out; exit \$rc"
+    bash -c "buildiso -p $PROFILE -w; rc=\$?; chown -R $(id -u):$(id -g) /morvane/out; exit \$rc"
 
 # artools hard-codes an 'artix-' prefix on the file name; drop it
 for iso in "$REPO/out/$PROFILE"/artix-*.iso; do

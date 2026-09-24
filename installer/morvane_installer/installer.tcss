@@ -1,0 +1,41 @@
+#body {
+    padding: 1 2;
+}
+
+.step-title {
+    text-style: bold;
+    color: $accent;
+    margin-bottom: 1;
+}
+
+.hint {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+.field-label {
+    margin-top: 1;
+}
+
+#nav {
+    height: auto;
+    align-horizontal: right;
+    padding: 0 2 1 2;
+}
+
+#nav Button {
+    margin-left: 2;
+}
+
+#error {
+    width: 1fr;
+    height: 3;
+    content-align: left middle;
+    color: $error;
+    text-style: bold;
+}
+
+#log {
+    height: 1fr;
+    border: round $accent;
+}

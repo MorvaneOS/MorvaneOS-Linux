@@ -1,3 +1,7 @@
 out/
 *.iso
 *.tar
+__pycache__/
+
+# Each package is its own repo under github.com/MorvaneOS, cloned into packages/<name>
+packages/

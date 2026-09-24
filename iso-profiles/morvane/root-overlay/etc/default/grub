@@ -40,7 +40,6 @@ export GRUB_COLOR_HIGHLIGHT="light-cyan/blue"
 
 # Uncomment one of them for the gfx desired, a image background or a gfxtheme
 #GRUB_BACKGROUND="/path/to/wallpaper"
-GRUB_THEME="/usr/share/grub/themes/artix/theme.txt"
 
 # Uncomment to get a beep at GRUB start
 #GRUB_INIT_TUNE="480 440 1"

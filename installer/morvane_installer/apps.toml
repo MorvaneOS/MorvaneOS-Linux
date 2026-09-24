@@ -1,0 +1,26 @@
+# Apps offered on the Apps screen.
+#   packages: pacman packages installed into the new system
+#   services: runit services enabled on the new system (names under /etc/runit/sv)
+# Package names must exist in the repos the installed system uses (Artix system/world/galaxy, [morvane]).
+
+[[category]]
+name = "Web browsers"
+
+  [[category.apps]]
+  name = "Firefox"
+  packages = ["firefox"]
+
+[[category]]
+name = "Office"
+
+  [[category.apps]]
+  name = "LibreOffice"
+  packages = ["libreoffice-fresh"]
+
+[[category]]
+name = "System"
+
+  [[category.apps]]
+  name = "OpenSSH server"
+  packages = ["openssh", "openssh-runit"]
+  services = ["sshd"]

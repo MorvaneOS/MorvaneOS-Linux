@@ -1,0 +1,8 @@
+# MorvaneOS live ISO: log straight into a root shell on tty1, like Arch's ISO.
+# Replaces the conf from Artix's runit package; the run script sources it.
+if [ -x /sbin/agetty -o -x /bin/agetty ]; then
+	GETTY_ARGS="--noclear --autologin root"
+fi
+
+BAUD_RATE=38400
+TERM_NAME=linux

@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
-# Boots the newest MorvaneOS ISO in QEMU. Usage: bash test.sh [options]
+# Boots the newest MorvaneOS ISO in QEMU. Usage: ./test [options]
 #   --bios      boot with legacy BIOS instead of UEFI
 #   --disk      attach a virtual disk (out/test-disk.qcow2, created at 20G) to install onto
 #   --no-iso    boot from the virtual disk only, to test an installed system (implies --disk)
+#
+# While a live ISO VM is running, `./test ssh [command]` opens a root shell in it
+# (or runs one command) from this terminal, so output can be copied out.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 OUT="$REPO/out"
+SSH_KEY="$OUT/vm-ssh-key"
+SSH_PORT="${SSH_PORT:-2222}"
+
+if [[ "${1:-}" == ssh ]]; then
+    shift
+    [[ -f "$SSH_KEY" ]] || { echo "No VM key yet; boot a VM with ./test first" >&2; exit 1; }
+    # The VM makes new host keys every boot, so don't record or check them
+    exec ssh -i "$SSH_KEY" -p "$SSH_PORT" \
+        -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+        root@127.0.0.1 "$@"
+fi
 
 uefi=true disk=false iso=true
 for arg in "$@"; do
@@ -18,7 +32,16 @@ for arg in "$@"; do
     esac
 done
 
-args=(-m 4G -smp 2 -nic user,model=virtio-net-pci)
+# Key for `./test ssh`, made once. The live ISO starts SSH only when it finds this
+# key in QEMU's fw_cfg, and the port is forwarded on localhost only.
+if [[ ! -f "$SSH_KEY" ]]; then
+    mkdir -p "$OUT"
+    ssh-keygen -q -t ed25519 -N '' -C morvane-test-vm -f "$SSH_KEY"
+fi
+
+args=(-m 4G -smp 2
+      -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
+      -fw_cfg "name=opt/org.morvane/ssh_key,file=$SSH_KEY.pub")
 
 if [[ -w /dev/kvm ]]; then
     args+=(-enable-kvm -cpu host)
@@ -49,7 +72,7 @@ fi
 
 if "$iso"; then
     iso_file=$(ls -t "$OUT"/morvane/*.iso 2>/dev/null | head -1)
-    [[ -n "$iso_file" ]] || { echo "No ISO in out/morvane/; run compile.sh first" >&2; exit 1; }
+    [[ -n "$iso_file" ]] || { echo "No ISO in out/morvane/; run compile first" >&2; exit 1; }
     echo "Booting $(basename "$iso_file") ($("$uefi" && echo UEFI || echo BIOS))"
     args+=(-cdrom "$iso_file" -boot d)
 fi

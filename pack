@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Builds MorvaneOS packages from packages/<name>/PKGBUILD inside the Artix build
+# container. Usage: ./pack <name> [...]   Output: out/packages/
+# Publish the results with publish.sh from the morvane-repo project.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")" && pwd)"
+IMAGE=morvane-build
+
+if (( $# == 0 )); then
+    echo "Usage: ./pack <name> [...]" >&2
+    echo "Packages: $(ls "$REPO/packages" | tr '\n' ' ')" >&2
+    exit 1
+fi
+for pkg in "$@"; do
+    [[ -f "$REPO/packages/$pkg/PKGBUILD" ]] || { echo "No packages/$pkg/PKGBUILD" >&2; exit 1; }
+done
+
+docker build -t "$IMAGE" -f "$REPO/build-env/Dockerfile" "$REPO"
+mkdir -p "$REPO/out/packages"
+
+# makepkg refuses to run as root, so build as a user with your uid (so the
+# output files are yours) that may sudo pacman to install build dependencies.
+for pkg in "$@"; do
+    docker run --rm \
+        -v "$REPO":/morvane \
+        -v morvane-pkg-cache:/var/cache/pacman/pkg \
+        "$IMAGE" \
+        bash -c "
+            useradd -m -u $(id -u) builder
+            echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+            # The image's package databases date from when it was built; refresh so
+            # packages published to [morvane] since then can be build dependencies
+            pacman -Syu --noconfirm
+            # Downloads and builds go to /tmp so nothing lands in the package's own git repo
+            cd /morvane/packages/$pkg
+            su builder -c 'PKGDEST=/morvane/out/packages BUILDDIR=/tmp/build SRCDEST=/tmp/sources makepkg --syncdeps --noconfirm --force --cleanbuild'
+        "
+done
+
+echo "Done: packages are in out/packages/"

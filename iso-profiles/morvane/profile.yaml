@@ -10,6 +10,7 @@ live-session:
     - syslog-ng
     - iwd
     - dhcpcd
+    - morvane-test-ssh  # SSH only inside ./test VMs; see live-overlay/etc/runit/sv/morvane-test-ssh
   user-services:
     - dbus
 rootfs:
@@ -17,7 +18,7 @@ rootfs:
     - terminus-font
     - iwd
     - broadcom-wl
-    - artix-grub-theme
+    - artix-grub-theme  # unused, but buildiso fails without it (copies themes/artix)
   packages-init:
     runit:
       - syslog-ng-runit
@@ -30,6 +31,7 @@ livefs:
     - artools-base
     - python
     - python-textual
+    - morvane-installer
   packages-init:
     runit:
       - artix-live-runit
