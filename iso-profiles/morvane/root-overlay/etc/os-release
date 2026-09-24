@@ -1,6 +1,0 @@
-NAME="MorvaneOS Linux"
-PRETTY_NAME="MorvaneOS Linux"
-ID=morvane
-ID_LIKE="artix arch"
-BUILD_ID=rolling
-ANSI_COLOR="38;2;23;147;209"

@@ -18,7 +18,7 @@ rootfs:
     - terminus-font
     - iwd
     - broadcom-wl
-    - artix-grub-theme  # unused, but buildiso fails without it (copies themes/artix)
+    - morvane-grub-theme  # also installs to themes/artix, which buildiso copies into the ISO
   packages-init:
     runit:
       - syslog-ng-runit

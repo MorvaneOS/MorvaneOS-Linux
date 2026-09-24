@@ -6,6 +6,8 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 IMAGE=morvane-build
+# Shown as "Packager" in `pacman -Qi` for every MorvaneOS package
+PACKAGER="Clove Twilight <clove@doughmination.gay>"
 
 if (( $# == 0 )); then
     echo "Usage: ./pack <name> [...]" >&2
@@ -34,7 +36,7 @@ for pkg in "$@"; do
             pacman -Syu --noconfirm
             # Downloads and builds go to /tmp so nothing lands in the package's own git repo
             cd /morvane/packages/$pkg
-            su builder -c 'PKGDEST=/morvane/out/packages BUILDDIR=/tmp/build SRCDEST=/tmp/sources makepkg --syncdeps --noconfirm --force --cleanbuild'
+            su builder -c 'PACKAGER=\"$PACKAGER\" PKGDEST=/morvane/out/packages BUILDDIR=/tmp/build SRCDEST=/tmp/sources makepkg --syncdeps --noconfirm --force --cleanbuild'
         "
 done
 
