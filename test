@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Boots the newest MorvaneOS ISO in QEMU. Usage: bash test.sh [options]
+#   --bios      boot with legacy BIOS instead of UEFI
+#   --disk      attach a virtual disk (out/test-disk.qcow2, created at 20G) to install onto
+#   --no-iso    boot from the virtual disk only, to test an installed system (implies --disk)
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")" && pwd)"
+OUT="$REPO/out"
+
+uefi=true disk=false iso=true
+for arg in "$@"; do
+    case "$arg" in
+        --bios) uefi=false ;;
+        --disk) disk=true ;;
+        --no-iso) disk=true iso=false ;;
+        *) echo "Unknown option: $arg" >&2; exit 1 ;;
+    esac
+done
+
+args=(-m 4G -smp 2 -nic user,model=virtio-net-pci)
+
+if [[ -w /dev/kvm ]]; then
+    args+=(-enable-kvm -cpu host)
+else
+    echo "Warning: /dev/kvm not available, running without acceleration (slow)" >&2
+fi
+
+if "$uefi"; then
+    # Arch path first, then Debian/Ubuntu (e.g. WSL)
+    code="" vars=""
+    for dir in /usr/share/edk2/x64 /usr/share/OVMF; do
+        for c in OVMF_CODE.4m.fd OVMF_CODE_4M.fd; do
+            [[ -f "$dir/$c" ]] && code="$dir/$c" && vars="$dir/${c/CODE/VARS}" && break 2
+        done
+    done
+    [[ -n "$code" ]] || { echo "UEFI firmware not found; install edk2-ovmf (Arch) or ovmf (Debian/Ubuntu)" >&2; exit 1; }
+
+    # Writable copy of the UEFI variables, so boot entries the installer creates survive reboots
+    [[ -f "$OUT/ovmf-vars.fd" ]] || { mkdir -p "$OUT"; cp "$vars" "$OUT/ovmf-vars.fd"; }
+    args+=(-drive "if=pflash,format=raw,readonly=on,file=$code"
+           -drive "if=pflash,format=raw,file=$OUT/ovmf-vars.fd")
+fi
+
+if "$disk"; then
+    [[ -f "$OUT/test-disk.qcow2" ]] || qemu-img create -f qcow2 "$OUT/test-disk.qcow2" 20G
+    args+=(-drive "file=$OUT/test-disk.qcow2,if=virtio")
+fi
+
+if "$iso"; then
+    iso_file=$(ls -t "$OUT"/morvane/*.iso 2>/dev/null | head -1)
+    [[ -n "$iso_file" ]] || { echo "No ISO in out/morvane/; run compile.sh first" >&2; exit 1; }
+    echo "Booting $(basename "$iso_file") ($("$uefi" && echo UEFI || echo BIOS))"
+    args+=(-cdrom "$iso_file" -boot d)
+fi
+
+exec qemu-system-x86_64 "${args[@]}"

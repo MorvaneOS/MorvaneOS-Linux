@@ -9,48 +9,30 @@ packages-base:
   - alsa-firmware
   - b43-fwcutter
   - btrfs-progs
-  - crda
-  - dhclient
   - diffutils
-  - dmraid
   - dosfstools
   - efibootmgr
   - e2fsprogs
-  - ecryptfs-utils
-  - exfat-utils
+  - exfatprogs
   - f2fs-tools
   - grub
   - inetutils
   - iptables
-  - jfsutils
   - linux
   - linux-firmware
-  - linux-headers
   - lsb-release
-  - logrotate
-  - lsb-release
-  - man-db
-  - man-pages
   - memtest86+
   - mkinitcpio
   - mkinitcpio-openswap
-  - modemmanager
   - nano
-  - nbd
-  - net-tools
   - ntfs-3g
   - os-prober
-  - s-nail
   - sudo
   - sysfsutils
-  - texinfo
   - usbutils
-  - vi
   - which
   - xfsprogs
-packages-apps:
-  - powertop
-  - inxi
+packages-apps: []
 packages-xorg: []
 packages-xlibre:
   - xlibre-xserver
@@ -68,82 +50,17 @@ packages-xlibre:
   - xlibre-xf86-video-voodoo
 packages-misc: []
 packages-init:
-  dinit:
-    - blocaled
-    - elogind-dinit
-    - dbus-dinit
-    - acpid-dinit
-    - avahi-dinit
-    - bluez-dinit
-    - cronie-dinit
-    - cryptsetup-dinit
-    - dhcpcd-dinit
-    - haveged-dinit
-    - lvm2-dinit
-    - mdadm-dinit
-    - nfs-utils-dinit
-    - ntp-dinit
-    - openssh-dinit
-    - power-profiles-daemon-dinit
-    - rsync-dinit
-    - wpa_supplicant-dinit
-  openrc:
-    - openrc-settingsd
-    - elogind-openrc
-    - dbus-openrc
-    - acpid-openrc
-    - avahi-openrc
-    - bluez-openrc
-    - cronie-openrc
-    - cryptsetup-openrc
-    - dhcpcd-openrc
-    - haveged-openrc
-    - lvm2-openrc
-    - mdadm-openrc
-    - nfs-utils-openrc
-    - ntp-openrc
-    - openssh-openrc
-    - power-profiles-daemon-openrc
-    - rsync-openrc
-    - wpa_supplicant-openrc
   runit:
-    - blocaled
-    - rsm
     - elogind-runit
     - dbus-runit
     - acpid-runit
-    - avahi-runit
-    - bluez-runit
-    - cronie-runit
     - cryptsetup-runit
     - dhcpcd-runit
-    - haveged-runit
     - lvm2-runit
-    - mdadm-runit
-    - nfs-utils-runit
-    - ntp-runit
     - openssh-runit
-    - power-profiles-daemon-runit
-    - rsync-runit
-    - wpa_supplicant-runit
-  s6:
-    - blocaled
-    - elogind-s6
-    - dbus-s6
-    - acpid-s6
-    - avahi-s6
-    - bluez-s6
-    - cronie-s6
-    - cryptsetup-s6
-    - dhcpcd-s6
-    - haveged-s6
-    - lvm2-s6
-    - mdadm-s6
-    - nfs-utils-s6
-    - ntp-s6
-    - openssh-s6
-    - power-profiles-daemon-s6
-    - rsync-s6
-    - wpa_supplicant-s6
+# bootfs is a throwaway layer used only to build the initramfs; it never ends up
+# in the ISO. linux-headers is here because artools reads the kernel version
+# from /usr/src/linux/version, which only the headers package provides.
 packages-boot:
   - iso-initcpio
+  - linux-headers

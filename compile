@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the MorvaneOS ISO inside an Artix container. Needs Docker; works on
-# Linux and in WSL (Docker Desktop). Usage: bash build.sh
+# Linux and in WSL (Docker Desktop). Usage: bash compile.sh
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
