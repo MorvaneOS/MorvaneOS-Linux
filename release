@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# Publishes a MorvaneOS ISO to https://morvane.doughmination.gay/install/.
+# Usage: ./release [path/to/morvane-*.iso]   (default: the newest ISO in out/morvane/)
+#
+# The ISO goes to install/<version>/morvaneos-<version>-x86_64.iso with a
+# .sha256 beside it. The version is the ISO's build date (2026.09.25), then
+# 2026.09.25.2 and so on for later builds that day. install/latest then points
+# at it, and all but the newest $KEEP versions are deleted, so R2 stays within
+# its free 10 GB.
+#
+# Uploading goes through the mirror Worker and needs its UPLOAD_TOKEN, either in
+# $MORVANE_UPLOAD_TOKEN or in ~/.config/morvane/upload-token.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")" && pwd)"
+URL=${MORVANE_MIRROR:-https://morvane.doughmination.gay}
+KEEP=3
+PART_SIZE=$((64 * 1024 * 1024))  # Cloudflare caps a request at 100 MB
+
+iso=${1:-$(ls -t "$REPO"/out/morvane/morvane-*.iso 2>/dev/null | head -n1)}
+[[ -f $iso ]] || { echo "No ISO found: run ./compile first, or give its path" >&2; exit 1; }
+
+token=${MORVANE_UPLOAD_TOKEN:-$(cat ~/.config/morvane/upload-token 2>/dev/null || true)}
+[[ -n $token ]] || { echo "No upload token: put it in ~/.config/morvane/upload-token" >&2; exit 1; }
+
+# morvane-runit-20260925-x86_64.iso -> 2026.09.25
+[[ $(basename "$iso") =~ -([0-9]{4})([0-9]{2})([0-9]{2})-x86_64\.iso$ ]] ||
+    { echo "Can't read the build date from $(basename "$iso")" >&2; exit 1; }
+date="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+
+work=$(mktemp -d)
+upload_id=
+cleanup() {
+    # An unfinished upload takes up space in R2 until it's aborted
+    if [[ -n $upload_id ]]; then
+        api -X DELETE "$dest?uploadId=$upload_id" >/dev/null 2>&1 || true
+    fi
+    rm -rf "$work"
+}
+trap cleanup EXIT
+
+# The token goes in a header file rather than on the command line, where any
+# user could see it in `ps`
+(umask 077 && printf 'authorization: Bearer %s\n' "$token" > "$work/auth")
+api() { curl -fsS -H @"$work/auth" "$@"; }
+
+# Published versions, oldest first
+versions() {
+    local body code
+    body=$(curl -sS -H 'accept: application/json' -w '\n%{http_code}' "$URL/install/")
+    code=${body##*$'\n'}
+    case $code in
+        200) grep -oE '"install/[0-9.]+/"' <<<"${body%$'\n'*}" | cut -d/ -f2 | sort -V || true ;;
+        404) ;;
+        *) echo "Listing $URL/install/ failed (HTTP $code)" >&2; return 1 ;;
+    esac
+}
+
+echo "Checksumming $(basename "$iso")"
+sum=$(sha256sum "$iso" | cut -d' ' -f1)
+
+published=$(versions)
+version=$date
+n=1
+while grep -qxF "$version" <<<"$published"; do
+    # Don't publish the same ISO twice
+    if [[ $(curl -fsS "$URL/install/$version.sha256" -L 2>/dev/null | cut -d' ' -f1) == "$sum" ]]; then
+        echo "This ISO is already published as $version" >&2
+        exit 1
+    fi
+    n=$((n + 1))
+    version="$date.$n"
+done
+newest=$(tail -n1 <<<"$published")
+if [[ -n $newest && $(printf '%s\n' "$newest" "$version" | sort -V | tail -n1) != "$version" ]]; then
+    echo "$newest is newer than this ISO ($version); install/latest would skip it" >&2
+    exit 1
+fi
+
+name="morvaneos-$version-x86_64.iso"
+dest="$URL/install/$version/$name"
+size=$(stat -c %s "$iso")
+parts=$(((size + PART_SIZE - 1) / PART_SIZE))
+
+echo "Publishing $version ($((size / 1024 / 1024)) MB, $parts parts)"
+upload_id=$(api -X POST -H 'content-type: application/x-iso9660-image' "$dest?uploads")
+done_parts=()
+for ((i = 1; i <= parts; i++)); do
+    echo "  part $i/$parts"
+    for attempt in 1 2 3; do
+        if etag=$(dd if="$iso" bs=$PART_SIZE skip=$((i - 1)) count=1 status=none |
+            api -X PUT -H 'content-type: application/octet-stream' --data-binary @- \
+                "$dest?uploadId=$upload_id&partNumber=$i"); then
+            break
+        fi
+        ((attempt < 3)) || { echo "Part $i failed 3 times; giving up" >&2; exit 1; }
+        echo "  retrying part $i"
+    done
+    done_parts+=("{\"partNumber\":$i,\"etag\":\"$etag\"}")
+done
+json=$(IFS=,; echo "[${done_parts[*]}]")
+api -X POST -H 'content-type: application/json' --data-binary "$json" "$dest?uploadId=$upload_id" >/dev/null
+upload_id=
+
+# The ISO's etag isn't a checksum of the whole file, so check the size at least
+uploaded=$(curl -fsSI "$dest" | tr -d '\r' | awk 'tolower($1) == "content-length:" { print $2 }')
+[[ $uploaded == "$size" ]] || { echo "Uploaded size is $uploaded, expected $size" >&2; exit 1; }
+
+printf '%s  %s\n' "$sum" "$name" |
+    api -X PUT -H 'content-type: text/plain; charset=utf-8' --data-binary @- "$dest.sha256" >/dev/null
+
+for old in $(versions | head -n -"$KEEP"); do
+    api -X DELETE "$URL/install/$old/" >/dev/null
+    echo "Removed $old"
+done
+
+echo "Published: $URL/install/$version"
+echo "Latest:    $URL/install/latest"
