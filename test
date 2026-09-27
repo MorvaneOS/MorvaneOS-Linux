@@ -4,6 +4,9 @@
 #   --disk      attach a virtual disk (out/test-disk.qcow2, created at 20G) to install onto
 #   --no-iso    boot from the virtual disk only, to test an installed system (implies --disk)
 #   --sound     give the VM a sound card that plays through this machine's speakers
+#   --secureboot  UEFI with Secure Boot support, starting in Setup Mode (no keys enrolled) so
+#               the installer can enroll its own. Enrolled keys are kept in out/ovmf-vars-secboot.fd;
+#               delete that file to go back to Setup Mode
 #
 # While a live ISO VM is running, `./test ssh [command]` opens a root shell in it
 # (or runs one command) from this terminal, so output can be copied out.
@@ -17,22 +20,33 @@ SSH_PORT="${SSH_PORT:-2222}"
 if [[ "${1:-}" == ssh ]]; then
     shift
     [[ -f "$SSH_KEY" ]] || { echo "No VM key yet; boot a VM with ./test first" >&2; exit 1; }
+    key="$SSH_KEY"
+    # On Windows drives under WSL (/mnt/c) every file is 0777 and ssh rejects the key,
+    # so use a private copy instead
+    if [[ "$(stat -c %a "$key")" != 600 ]]; then
+        key="${XDG_RUNTIME_DIR:-/tmp}/morvane-vm-ssh-key-$UID"
+        (umask 077 && cp "$SSH_KEY" "$key")
+    fi
     # The VM makes new host keys every boot, so don't record or check them
-    exec ssh -i "$SSH_KEY" -p "$SSH_PORT" \
+    exec ssh -i "$key" -p "$SSH_PORT" \
         -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
         root@127.0.0.1 "$@"
 fi
 
-uefi=true disk=false iso=true sound=false
+uefi=true disk=false iso=true sound=false secureboot=false
 for arg in "$@"; do
     case "$arg" in
         --bios) uefi=false ;;
         --disk) disk=true ;;
         --no-iso) disk=true iso=false ;;
         --sound) sound=true ;;
+        --secureboot) secureboot=true ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
+if "$secureboot" && ! "$uefi"; then
+    echo "--secureboot needs UEFI; drop --bios" >&2; exit 1
+fi
 
 # Key for `./test ssh`, made once. The live ISO starts SSH only when it finds this
 # key in QEMU's fw_cfg, and the port is forwarded on localhost only.
@@ -41,7 +55,16 @@ if [[ ! -f "$SSH_KEY" ]]; then
     ssh-keygen -q -t ed25519 -N '' -C morvane-test-vm -f "$SSH_KEY"
 fi
 
-args=(-m 4G -smp 2
+cpus=2
+# WSL2 runs inside Hyper-V, and nested KVM there can't enter SMM, which the Secure Boot
+# firmware needs ("KVM: entry failed, hardware error 0xffffffff"). Emulate instead, with
+# more vCPUs since each emulated one gets its own host thread.
+emulate=false
+if "$secureboot" && grep -qi microsoft /proc/version; then
+    emulate=true cpus=4
+fi
+
+args=(-m 4G -smp "$cpus"
       -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
       -fw_cfg "name=opt/org.morvane/ssh_key,file=$SSH_KEY.pub")
 
@@ -55,7 +78,10 @@ if "$sound"; then
     fi
 fi
 
-if [[ -w /dev/kvm ]]; then
+if "$emulate"; then
+    echo "Warning: WSL can't run Secure Boot firmware under KVM, emulating instead (slower)" >&2
+    args+=(-accel tcg,thread=multi -cpu max)
+elif [[ -w /dev/kvm ]]; then
     args+=(-enable-kvm -cpu host)
 else
     echo "Warning: /dev/kvm not available, running without acceleration (slow)" >&2
@@ -63,18 +89,32 @@ fi
 
 if "$uefi"; then
     # Arch path first, then Debian/Ubuntu (e.g. WSL)
-    code="" vars=""
+    # The plain VARS files have no keys enrolled, so --secureboot starts in Setup Mode
+    code="" vars="" vars_copy="$OUT/ovmf-vars.fd" codes=(OVMF_CODE.4m.fd OVMF_CODE_4M.fd)
+    if "$secureboot"; then
+        codes=(OVMF_CODE.secboot.4m.fd OVMF_CODE_4M.secboot.fd)
+        vars_copy="$OUT/ovmf-vars-secboot.fd"
+    fi
     for dir in /usr/share/edk2/x64 /usr/share/OVMF; do
-        for c in OVMF_CODE.4m.fd OVMF_CODE_4M.fd; do
-            [[ -f "$dir/$c" ]] && code="$dir/$c" && vars="$dir/${c/CODE/VARS}" && break 2
+        for c in "${codes[@]}"; do
+            [[ -f "$dir/$c" ]] || continue
+            code="$dir/$c"
+            vars="$dir/${c/CODE/VARS}"
+            vars="${vars/.secboot/}"  # both builds share the same empty VARS file
+            break 2
         done
     done
     [[ -n "$code" ]] || { echo "UEFI firmware not found; install edk2-ovmf (Arch) or ovmf (Debian/Ubuntu)" >&2; exit 1; }
 
     # Writable copy of the UEFI variables, so boot entries the installer creates survive reboots
-    [[ -f "$OUT/ovmf-vars.fd" ]] || { mkdir -p "$OUT"; cp "$vars" "$OUT/ovmf-vars.fd"; }
+    [[ -f "$vars_copy" ]] || { mkdir -p "$OUT"; cp "$vars" "$vars_copy"; }
     args+=(-drive "if=pflash,format=raw,readonly=on,file=$code"
-           -drive "if=pflash,format=raw,file=$OUT/ovmf-vars.fd")
+           -drive "if=pflash,format=raw,file=$vars_copy")
+
+    # Secure Boot firmware keeps its variables in SMM-protected flash, which needs q35
+    if "$secureboot"; then
+        args+=(-machine q35,smm=on -global driver=cfi.pflash01,property=secure,value=on)
+    fi
 fi
 
 if "$disk"; then
@@ -87,7 +127,7 @@ fi
 if "$iso"; then
     iso_file=$(ls -t "$OUT"/morvane/*.iso 2>/dev/null | head -1)
     [[ -n "$iso_file" ]] || { echo "No ISO in out/morvane/; run compile first" >&2; exit 1; }
-    echo "Booting $(basename "$iso_file") ($("$uefi" && echo UEFI || echo BIOS))"
+    echo "Booting $(basename "$iso_file") ($("$uefi" && echo UEFI || echo BIOS)$("$secureboot" && echo ', Secure Boot' || true))"
     # The ISO boots first even when the disk already has a system on it
     args+=(-drive "file=$iso_file,media=cdrom,if=none,id=cdrom,readonly=on"
            -device "ide-cd,drive=cdrom,bootindex=0")
